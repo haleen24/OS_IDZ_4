@@ -58,7 +58,7 @@ int main(int argc, char **argv) {
 
     std::cout << "Workers are connected\n";
 
-    init_dict();
+    //init_dict();
 
     auto tasks = split(message);
 

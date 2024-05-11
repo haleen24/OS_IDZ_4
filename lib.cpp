@@ -6,20 +6,20 @@ void init_default_dict() {
     }
 }
 
-void init_dict(const std::unordered_map<char, char> &new_dict) {
+void init_dict(const std::unordered_map<char, char>& new_dict) {
     if (new_dict.empty()) {
         return init_default_dict();
     }
     dict = new_dict;
 }
 
-void Die(const std::string &message) {
+void Die(const std::string& message) {
     std::cout << message << '\n';
     exit(-1);
 }
 
 
-std::vector<std::string> split(const std::string &str) {
+std::vector<std::string> split(const std::string& str) {
     std::vector<std::string> res(str.size() / TASK_SIZE + (str.size() % TASK_SIZE != 0));
     auto iter = res.begin();
     for (int i = 0; i < str.size(); i += TASK_SIZE) {
@@ -45,7 +45,8 @@ TaskStruct recive_task(int socket, int flag) {
     int size = recv(socket, id, ID_SIZE, flag);
     if (size < 0) {
         Die("recv() failed");
-    } else if (size == 0) {
+    }
+    else if (size == 0) {
         return TaskStruct{
             .id = -1,
             .socket = -1,
@@ -53,7 +54,6 @@ TaskStruct recive_task(int socket, int flag) {
             .flag = 0
         };
     }
-    errno = 0;
     int id_val = std::stoi(std::string(id, size));
     char buff[TASK_SIZE];
     size = recv(socket, buff, TASK_SIZE, flag);
@@ -69,9 +69,9 @@ TaskStruct recive_task(int socket, int flag) {
 }
 
 
-std::string encode(const std::string &s) {
+std::string encode(const std::string& s) {
     std::string res;
-    for (auto &item: s) {
+    for (auto& item : s) {
         res += dict[item];
     }
     return res;
@@ -91,4 +91,13 @@ void set_signal_handler() {
     if (sigaction(SIGINT, &handler, 0) < 0) {
         Die("sigaction() failed");
     }
+}
+
+std::string recive_log(int socket) {
+    char buff[LOG_SIZE];
+    int size = recv(socket, buff, LOG_SIZE, 0);
+    if (size < 0) {
+        Die("recv() failed");
+    }
+    return {buff};
 }

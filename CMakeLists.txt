@@ -4,9 +4,14 @@ project(idz3)
 set(CMAKE_CXX_STANDARD 20)
 
 add_executable(4-5_s 4-5/server.cpp lib.cpp)
-
 add_executable(4-5_c 4-5/client.cpp lib.cpp)
 
-add_executable(6-7_s 6-7/server.cpp lib.cpp)
-add_executable(6-7_c 6-7/client.cpp lib.cpp)
-add_executable(6-7_o 6-7/observer.cpp lib.cpp)
+
+add_executable(6-7-8_s 6-7-8/server.cpp lib.cpp)
+add_executable(6-7-8_c 6-7-8/client.cpp lib.cpp)
+add_executable(6-7-8_o 6-7-8/observer.cpp lib.cpp)
+
+
+add_executable(9-10_s 9-10/server.cpp lib.cpp)
+add_executable(9-10_c 9-10/client.cpp lib.cpp)
+add_executable(9-10_o 9-10/observer.cpp lib.cpp)

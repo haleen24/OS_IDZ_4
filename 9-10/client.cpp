@@ -3,6 +3,8 @@
 #include <arpa/inet.h>
 #include <cstring>
 #include <csignal>
+#include <unordered_set>
+
 #include "../lib.h"
 
 int main(int argc, char** argv) {
@@ -32,15 +34,19 @@ int main(int argc, char** argv) {
     send(sock, message.c_str(), TASK_SIZE, 0);
 
     std::cout << "You are connected\n";
-
+    std::pmr::unordered_set<int> done;
     for (;;) {
         auto task = recive_task(sock);
         if (task.id == -1) {
             close(sock);
             exit(0);
         }
+        else if (done.count(task.id)) {
+            continue;
+        }
         auto answer = encode(task.task);
         send_task(task.id, task.socket, answer, MSG_DONTWAIT);
-        std::cout << "The task with id: " << task.id << " were sent\n";
+        std::cout << "task with id: " << task.id << " were sent, answer: " << answer << "\n";
+        done.insert(task.id);
     }
 }

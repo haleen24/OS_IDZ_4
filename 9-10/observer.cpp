@@ -28,19 +28,19 @@ int main(int argc, char** argv) {
         exit(-1);
     }
     init_dict();
-    std::string message = "worker";
+    std::string message = "observer";
     send(sock, message.c_str(), TASK_SIZE, 0);
 
     std::cout << "You are connected\n";
 
     for (;;) {
-        auto task = recive_task(sock);
-        if (task.id == -1) {
-            close(sock);
+        auto log = recive_log(sock);
+        std::cout << log << '\n';
+        if (log == "log: exit") {
             exit(0);
         }
-        auto answer = encode(task.task);
-        send_task(task.id, task.socket, answer, MSG_DONTWAIT);
-        std::cout << "The task with id: " << task.id << " were sent\n";
+        if (log.empty()) {
+            Die("socket were closed");
+        }
     }
 }

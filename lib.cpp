@@ -35,18 +35,21 @@ std::string convert_id_to_message(int32_t id) {
     return str + id_str;
 }
 
-void send_task(int32_t id, int socket, const std::string task, int flag) {
-    send(socket, convert_id_to_message(id).c_str(), ID_SIZE, flag);
-    send(socket, task.c_str(), task.size(), flag);
+ssize_t send_task(int32_t id, int socket, const std::string task, int flag) {
+    ssize_t size = send(socket, convert_id_to_message(id).c_str(), ID_SIZE, flag);
+    if (size <= 0 || send(socket, task.c_str(), task.size(), flag) <= 0) {
+        return 0;
+    }
+    return 1;
 }
 
 TaskStruct recive_task(int socket, int flag) {
     char id[ID_SIZE];
     int size = recv(socket, id, ID_SIZE, flag);
-    if (size < 0) {
+    if (size < 0 && flag != MSG_NOSIGNAL) {
         Die("recv() failed");
     }
-    else if (size == 0) {
+    else if (size == 0 || (size < 0 && flag == MSG_NOSIGNAL)) {
         return TaskStruct{
             .id = -1,
             .socket = -1,
@@ -57,8 +60,16 @@ TaskStruct recive_task(int socket, int flag) {
     int id_val = std::stoi(std::string(id, size));
     char buff[TASK_SIZE];
     size = recv(socket, buff, TASK_SIZE, flag);
-    if (size <= 0) {
+    if (size < 0 && flag != MSG_NOSIGNAL) {
         Die("recv() failed");
+    }
+    else if (size == 0 || (size < 0 && flag == MSG_NOSIGNAL)) {
+        return TaskStruct{
+            .id = -1,
+            .socket = -1,
+            .task = "",
+            .flag = 0
+        };
     }
     return TaskStruct{
         .id = id_val,
@@ -93,11 +104,35 @@ void set_signal_handler() {
     }
 }
 
-std::string recive_log(int socket) {
+std::string recive_log(int socket, int flag = 0) {
     char buff[LOG_SIZE];
-    int size = recv(socket, buff, LOG_SIZE, 0);
+    int size = recv(socket, buff, LOG_SIZE, flag);
+    if (size == 0 || (size < 0 && flag == MSG_NOSIGNAL)) {
+        std::cout << "socket was disconnected\n";
+        exit(0);
+    }
     if (size < 0) {
         Die("recv() failed");
     }
     return {buff};
+}
+
+int msleep(long msec) {
+    struct timespec ts;
+    int res;
+
+    if (msec < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    ts.tv_sec = msec / 1000;
+    ts.tv_nsec = (msec % 1000) * 1000000;
+
+    do {
+        res = nanosleep(&ts, &ts);
+    }
+    while (res && errno == EINTR);
+
+    return res;
 }

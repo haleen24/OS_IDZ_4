@@ -13,7 +13,7 @@
 #define TASK_SIZE 10ul
 // #define ANSWER_SIZE (3*TASK_SIZE)
 #define ID_SIZE 10ul
-#define SHIFT 10
+#define SHIFT 1
 #define LOG_SIZE 255
 inline std::unordered_map<char, char> dict{};
 
@@ -25,7 +25,7 @@ void Die(const std::string& message);
 
 std::vector<std::string> split(const std::string& str);
 
-void send_task(int32_t id, int socket, std::string task, int flag = 0);
+ssize_t send_task(int32_t id, int socket, std::string task, int flag = 0);
 
 struct TaskStruct {
     int32_t id;
@@ -49,3 +49,5 @@ void sig_handler(int);
 void set_signal_handler();
 
 std::string recive_log(int);
+
+int msleep(long msec);

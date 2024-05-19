@@ -6,24 +6,26 @@
 
 
 int number_of_workers;
-pthread_mutex_t mutex;
+pthread_mutex_t client_access_mutex;
 std::vector<struct sockaddr_in> clients;
 std::vector<int> clients_sock;
 std::vector<struct sockaddr_in> listeners;
 std::vector<int> listeners_sock;
 
 void* send_log(void* msg_ptr) {
-    std::string msg = "log: " + *reinterpret_cast<std::string*>(msg_ptr);
+    const auto* param = static_cast<std::string*>(msg_ptr);
+    std::string msg = "log: " + *param;
+    delete param;
     if (msg.size() > LOG_SIZE) {
         msg = std::string(msg.begin(), msg.begin() + LOG_SIZE);
     }
-    pthread_mutex_lock(&mutex);
+    pthread_mutex_lock(&client_access_mutex);
     for (auto listener : listeners_sock) {
         if (send(listener, msg.c_str(), LOG_SIZE, MSG_DONTWAIT) < 0) {
             std::cout << "SERVER LOG: some troubles with sending observers' logs\n";
         }
     }
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&client_access_mutex);
     pthread_exit(nullptr);
 }
 
@@ -39,7 +41,7 @@ void* accept_listeners(void* ptr) {
             listeners.pop_back();
             Die("accept() listeners failed");
         }
-        pthread_mutex_lock(&mutex);
+        pthread_mutex_lock(&client_access_mutex);
         listeners_sock.push_back(sock);
         char buff[TASK_SIZE];
         const size_t size = recv(sock, buff, TASK_SIZE, 0);
@@ -52,7 +54,7 @@ void* accept_listeners(void* ptr) {
             close(sock);
             listeners.pop_back();
         }
-        pthread_mutex_unlock(&mutex);
+        pthread_mutex_unlock(&client_access_mutex);
     }
     return nullptr;
 }
@@ -79,7 +81,7 @@ void accept_clients(const int serv_sock) {
 }
 
 int main(int argc, char** argv) {
-    pthread_mutex_init(&mutex, nullptr);
+    pthread_mutex_init(&client_access_mutex, nullptr);
     if (argc != 5) {
         Die("ARG FORMAT: <SERVER IP, SERVER PORT, NUMBER OF WORKERS, MESSAGE>");
     }
@@ -121,32 +123,40 @@ int main(int argc, char** argv) {
     pthread_t tmp;
     std::string msg;
     std::vector<pthread_t> log_threads;
-
     auto tasks = split(message);
-    std::stack<std::string> stack{};
     for (int i = 0; i < tasks.size(); ++i) {
-        int cl_sock = clients_sock[i % clients_sock.size()];
+        const int cl_sock = clients_sock[i % clients_sock.size()];
         send_task(i, cl_sock, tasks[i], MSG_DONTWAIT);
         msg = "task " + tasks[i] + " was sent to worker (sock: " + std::to_string(cl_sock) + ")";
-        stack.push(msg);
-        pthread_create(&tmp, nullptr, send_log, (void*)&(stack.top()));
+        pthread_create(&tmp, nullptr, send_log, new std::string(msg));
+        log_threads.push_back(tmp);
     }
     std::vector<TaskStruct> answers(tasks.size());
     for (int i = 0; i < tasks.size(); ++i) {
         answers[i] = recive_task(clients_sock[i % clients_sock.size()], 0);
+        msg = "task with id " + std::to_string(answers[i].id) + " was gotten (sock: " + std::to_string(
+            answers[i].socket);
+        pthread_create(&tmp, nullptr, send_log, new std::string(msg));
+        log_threads.push_back(tmp);
     }
-    std::cout << "all data were gotten\n";
+    msg = "all data were gotten";
+    pthread_create(&tmp, nullptr, send_log, new std::string(msg));
+    log_threads.push_back(tmp);
+    std::cout << msg << '\n';
     for (int i = 0; i < tasks.size(); ++i) {
-        std::cout << "id: " << i << ", answer: " << answers[i].task << '\n';
+        msg = "id: " + std::to_string(i) + ", answer: " + answers[i].task;
+        std::cout << msg << '\n';
+        pthread_create(&tmp, nullptr, send_log, new std::string(msg));
+        log_threads.push_back(tmp);
     }
     for (auto& item : clients_sock) {
         close(item);
     }
     pthread_cancel(accepter);
     msg = "exit";
-    pthread_create(&tmp, nullptr, send_log, (void*)&msg);
+    pthread_create(&tmp, nullptr, send_log, new std::string(msg));
     pthread_join(tmp, nullptr);
-    pthread_mutex_lock(&mutex);
+    pthread_mutex_lock(&client_access_mutex);
     log_threads.push_back(tmp);
     for (auto& item : log_threads) {
         pthread_cancel(item);
@@ -154,5 +164,5 @@ int main(int argc, char** argv) {
     for (auto& item : listeners_sock) {
         close(item);
     }
-    pthread_mutex_destroy(&mutex);
+    pthread_mutex_destroy(&client_access_mutex);
 }

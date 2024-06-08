@@ -35,21 +35,22 @@ std::string convert_id_to_message(int32_t id) {
     return str + id_str;
 }
 
-ssize_t send_task(int32_t id, int socket, const std::string task, int flag) {
-    ssize_t size = send(socket, convert_id_to_message(id).c_str(), ID_SIZE, flag);
-    if (size <= 0 || send(socket, task.c_str(), task.size(), flag) <= 0) {
+ssize_t send_task(int32_t id, int socket, const std::string task, int flag, sockaddr* sockaddr, socklen_t addr_len) {
+    ssize_t size = sendto(socket, (convert_id_to_message(id) + task).c_str(), ID_SIZE + task.size(), flag, sockaddr,
+                          addr_len);
+    if (size <= 0) {
         return 0;
     }
     return 1;
 }
 
-TaskStruct recive_task(int socket, int flag) {
-    char id[ID_SIZE];
-    int size = recv(socket, id, ID_SIZE, flag);
-    if (size < 0 && flag != MSG_NOSIGNAL) {
-        Die("recv() failed");
+TaskStruct recive_task(int socket, int flag, sockaddr* sockaddr, socklen_t* t) {
+    char bigbuff[ID_SIZE + TASK_SIZE];
+    ssize_t size = recvfrom(socket, bigbuff, ID_SIZE + TASK_SIZE, flag, sockaddr, t);
+    if (size < 0) {
+        Die("recvfrom() failed");
     }
-    else if (size == 0 || (size < 0 && flag == MSG_NOSIGNAL)) {
+    else if (size == 0) {
         return TaskStruct{
             .id = -1,
             .socket = -1,
@@ -57,24 +58,11 @@ TaskStruct recive_task(int socket, int flag) {
             .flag = 0
         };
     }
-    int id_val = std::stoi(std::string(id, size));
-    char buff[TASK_SIZE];
-    size = recv(socket, buff, TASK_SIZE, flag);
-    if (size < 0 && flag != MSG_NOSIGNAL) {
-        Die("recv() failed");
-    }
-    else if (size == 0 || (size < 0 && flag == MSG_NOSIGNAL)) {
-        return TaskStruct{
-            .id = -1,
-            .socket = -1,
-            .task = "",
-            .flag = 0
-        };
-    }
+    int id_val = std::stoi(std::string(bigbuff, ID_SIZE));
     return TaskStruct{
         .id = id_val,
         .socket = socket,
-        .task = std::string(buff, size),
+        .task = std::string(bigbuff, ID_SIZE, size - ID_SIZE),
         .flag = 0
     };
 }
@@ -106,9 +94,9 @@ void set_signal_handler() {
 
 std::string recive_log(int socket, int flag = 0) {
     char buff[LOG_SIZE];
-    int size = recv(socket, buff, LOG_SIZE, flag);
-    if (size == 0 || (size < 0 && flag == MSG_NOSIGNAL)) {
-        std::cout << "socket was disconnected\n";
+    ssize_t size = recvfrom(socket, buff, LOG_SIZE, flag, NULL, 0);
+    if (size == 0) {
+        std::cout << "Server reach the end, exit...\n";
         exit(0);
     }
     if (size < 0) {

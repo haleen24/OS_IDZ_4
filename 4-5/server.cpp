@@ -9,12 +9,12 @@ std::vector<int> clients_sock;
 void accept_clients(const int serv_sock) {
     for (int i = 0; i < number_of_workers; ++i) {
         char buff[TASK_SIZE];
-        socklen_t clientSize = sizeof(clients[i]);
-        auto &cl_sock = clients_sock[i];
-        if ((cl_sock = accept(serv_sock, reinterpret_cast<struct sockaddr *>(&clients[i]), &clientSize)) < 0) {
-            Die("accept() failed");
+        auto& client_addr = clients[i];
+        size_t size;
+        socklen_t len = sizeof(client_addr);
+        if ((size = recvfrom(serv_sock, buff, TASK_SIZE, 0, reinterpret_cast<sockaddr*>(&client_addr), &len)) == 0) {
+            Die("cant get start message from client");
         }
-        const size_t size = recv(cl_sock, buff, TASK_SIZE, 0);
         auto msg = std::string(buff, size);
         if (msg == "worker") {
             continue;
@@ -22,11 +22,11 @@ void accept_clients(const int serv_sock) {
     }
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
     if (argc != 5) {
         Die("ARG FORMAT: <SERVER IP, SERVER PORT, NUMBER OF WORKERS, MESSAGE>");
     }
-    const char *server_ip = argv[1];
+    const char* server_ip = argv[1];
     unsigned short port = atoi(argv[2]);
     number_of_workers = atoi(argv[3]);
     if (number_of_workers <= 0) {
@@ -41,39 +41,44 @@ int main(int argc, char **argv) {
     serv.sin_addr.s_addr = inet_addr(server_ip);
     serv.sin_port = htons(port);
     serv.sin_family = AF_INET;
-    if ((serv_sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+    if ((serv_sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
         Die("socket() failed");
     }
 
-    if (bind(serv_sock, reinterpret_cast<struct sockaddr *>(&serv), sizeof(serv)) < 0) {
+    if (bind(serv_sock, reinterpret_cast<struct sockaddr*>(&serv), sizeof(serv)) < 0) {
         Die("bind() failed");
     }
     std::cout << "Server on: " << inet_ntoa(serv.sin_addr) << ":" << port << '\n';
-    if (listen(serv_sock, 2 * number_of_workers) < 0) {
-        Die("listen() failed");
-    } else {
-        std::cout << "listening\n";
-    }
+
+    std::cout << "waiting for clients\n";
     accept_clients(serv_sock);
 
     std::cout << "Workers are connected\n";
 
-    //init_dict();
+    init_dict();
 
     auto tasks = split(message);
 
     for (int i = 0; i < tasks.size(); ++i) {
-        send_task(i, clients_sock[i % clients_sock.size()], tasks[i], MSG_DONTWAIT);
+        send_task(i, serv_sock, tasks[i], 0, reinterpret_cast<sockaddr*>(&clients[i % clients.size()]),
+                  sizeof(clients[i % clients.size()]));
     }
     std::vector<TaskStruct> answers(tasks.size());
     for (int i = 0; i < tasks.size(); ++i) {
-        answers[i] = recive_task(clients_sock[i % clients_sock.size()], 0);
+        sockaddr_in addr;
+        socklen_t t = sizeof(addr);
+        TaskStruct answer = recive_task(serv_sock, 0, reinterpret_cast<sockaddr*>(&addr), &t);
+        answers[answer.id] = std::move(answer);
+        std::cout << "task witd id: " << answer.id << " were gotten\n";
     }
     std::cout << "all data were gotten\n";
     for (int i = 0; i < tasks.size(); ++i) {
         std::cout << "id: " << i << ", answer: " << answers[i].task << '\n';
     }
-    for (auto &item: clients_sock) {
+    for (auto& item : clients) {
+        sendto(serv_sock, {}, 0, 0, reinterpret_cast<sockaddr*>(&item), sizeof(item));
+    }
+    for (auto& item : clients_sock) {
         close(item);
     }
 }

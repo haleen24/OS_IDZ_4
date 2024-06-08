@@ -25,7 +25,7 @@ void Die(const std::string& message);
 
 std::vector<std::string> split(const std::string& str);
 
-ssize_t send_task(int32_t id, int socket, std::string task, int flag = 0);
+ssize_t send_task(int32_t id, int socket, const std::string task, int flag, sockaddr* sockaddr, socklen_t addr_len);
 
 struct TaskStruct {
     int32_t id;
@@ -34,13 +34,13 @@ struct TaskStruct {
     int flag = 0;
 };
 
-inline void* send_task(void* send) {
-    const auto tmp = static_cast<TaskStruct*>(send);
-    send_task(tmp->id, tmp->socket, tmp->task, tmp->flag);
-    return nullptr;
-}
+// inline void* send_task(void* send) {
+//     const auto tmp = static_cast<TaskStruct*>(send);
+//     send_task(tmp->id, tmp->socket, tmp->task, tmp->flag);
+//     return nullptr;
+// }
 
-TaskStruct recive_task(int socket, int flag = 0);
+TaskStruct recive_task(int socket, int flag, sockaddr* sockaddr, socklen_t*);
 
 std::string encode(const std::string& s);
 
@@ -48,6 +48,6 @@ void sig_handler(int);
 
 void set_signal_handler();
 
-std::string recive_log(int);
+std::string recive_log(int socket, int flag);
 
 int msleep(long msec);

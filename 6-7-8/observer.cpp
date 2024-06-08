@@ -8,11 +8,12 @@
 int main(int argc, char** argv) {
     set_signal_handler();
     int sock;
+    struct ip_mreq req;
     if (argc != 3) {
         std::cout << "ARG FORMAT: <SERVER IP> <SERVER PORT>\n";
         exit(-1);
     }
-    if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+    if ((sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
         std::cout << "socket() failed\n";
         exit(-1);
     }
@@ -22,25 +23,25 @@ int main(int argc, char** argv) {
     memset(&serv, 0, sizeof(serv));
     serv.sin_port = htons(serverPort);
     serv.sin_family = AF_INET;
-    serv.sin_addr.s_addr = inet_addr(serverIp);
-    if (connect(sock, (struct sockaddr*)&serv, sizeof(serv)) < 0) {
-        std::cout << "connection() failed\n";
-        exit(-1);
+    serv.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (bind(sock, (struct sockaddr*)&serv, sizeof(serv)) < 0) {
+        Die("bind() failed");
+    }
+
+    req.imr_multiaddr.s_addr = inet_addr(serverIp);
+    req.imr_interface.s_addr = htonl(INADDR_ANY);
+
+    if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (void*)&req,
+                   sizeof(req)) < 0) {
+        Die("setsockopt() failed");
     }
     init_dict();
-    std::string message = "observer";
-    send(sock, message.c_str(), TASK_SIZE, 0);
 
     std::cout << "You are connected\n";
 
     for (;;) {
-        auto log = recive_log(sock);
+        auto log = recive_log(sock, 0);
         std::cout << log << '\n';
-        if (log == "log: exit") {
-            exit(0);
-        }
-        if (log.empty()) {
-            Die("socket were closed");
-        }
     }
 }
